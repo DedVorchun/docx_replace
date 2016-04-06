@@ -2,15 +2,13 @@
 
 require "docx_replace/version"
 require 'zip'
-require 'tempfile'
 
 module DocxReplace
   class Doc
     attr_reader :document_content
 
-    def initialize(path, temp_dir=nil)
+    def initialize(path)
       @zip_file = Zip::File.new(path)
-      @temp_dir = temp_dir
       read_docx_file
     end
 
@@ -46,31 +44,17 @@ module DocxReplace
     end
 
     def write_back_to_file(new_path=nil)
-      if @temp_dir.nil?
-        temp_file = Tempfile.new('docxedit-')
-      else
-        temp_file = Tempfile.new('docxedit-', @temp_dir)
-      end
-      Zip::OutputStream.open(temp_file.path) do |zos|
+      Zip::OutputStream.write_buffer do |zos|
         @zip_file.entries.each do |e|
           unless e.name == DOCUMENT_FILE_PATH
             zos.put_next_entry(e.name)
-            zos.print e.get_input_stream.read
+            zos.write e.get_input_stream.read
           end
         end
 
         zos.put_next_entry(DOCUMENT_FILE_PATH)
-        zos.print @document_content
-      end
-
-      if new_path.nil?
-        path = @zip_file.name
-        FileUtils.rm(path)
-      else
-        path = new_path
-      end
-      FileUtils.mv(temp_file.path, path)
-      @zip_file = Zip::File.new(path)
+        zos.write @document_content
+      end.string
     end
   end
 end
